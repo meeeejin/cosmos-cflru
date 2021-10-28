@@ -157,15 +157,29 @@ unsigned int AllocateDataBuf()
 		assert(!"[WARNING] There is no valid buffer entry [WARNING]");
 
 	/* mijin */
-	int bufIndex;
+	int scanIndex;
+	unsigned int targetEntry = evictedEntry;
 
 	// Search a clean buffer in the scan depth
-	for (bufIndex = 0; bufIndex < CFLRU_SCAN_DEPTH; bufIndex++)
+	for (scanIndex = 0; scanIndex < CFLRU_SCAN_DEPTH && dataBufMapPtr->dataBuf[targetEntry].prevEntry != DATA_BUF_NONE; scanIndex++)
 	{
-		if (dataBufMapPtr->dataBuf[evictedEntry].dirty == DATA_BUF_CLEAN) break;
+		if (dataBufMapPtr->dataBuf[targetEntry].dirty == DATA_BUF_CLEAN)
+		{
+			evictedEntry = targetEntry;
+			break;
+		}
+
+		targetEntry = dataBufMapPtr->dataBuf[targetEntry].prevEntry;
 	}
 
-	if (bufIndex == CFLRU_SCAN_DEPTH) xil_printf("[MIJIN] There is no clean buffer in the scan depth!!\r\n");
+	if (scanIndex == CFLRU_SCAN_DEPTH)
+	{
+		xil_printf("[MIJIN] There is no clean buffer in the scan depth, evictedEntry = %u!!\r\n", evictedEntry);
+	}
+	else
+	{
+		xil_printf("[MIJIN] scanIndex = %d, evictedEntry = %u!!\r\n", scanIndex, evictedEntry);
+	}
 
 	// Update the buf/hash maps to relocate the victim buffer to the head of the LRU list
 	if (dataBufMapPtr->dataBuf[evictedEntry].prevEntry != DATA_BUF_NONE && dataBufMapPtr->dataBuf[evictedEntry].nextEntry != DATA_BUF_NONE)

@@ -54,6 +54,10 @@ DATA_BUF_LRU_LIST dataBufLruList;
 P_DATA_BUF_HASH_TABLE dataBufHashTablePtr;
 P_TEMPORARY_DATA_BUF_MAP tempDataBufMapPtr;
 
+/* mijin */
+#define CFLRU_SCAN_DEPTH	1024
+/* end */
+
 void InitDataBuf()
 {
 	int bufEntry;
@@ -75,6 +79,10 @@ void InitDataBuf()
 		dataBufMapPtr->dataBuf[bufEntry].hashPrevEntry = DATA_BUF_NONE;
 		dataBufMapPtr->dataBuf[bufEntry].hashNextEntry = DATA_BUF_NONE;
 	}
+
+	/* mijin */
+	xil_printf("[MIJIN] The number of buffer entries = %d\r\n", AVAILABLE_DATA_BUFFER_ENTRY_COUNT);
+	/* end */
 
 	dataBufMapPtr->dataBuf[0].prevEntry = DATA_BUF_NONE;
 	dataBufMapPtr->dataBuf[AVAILABLE_DATA_BUFFER_ENTRY_COUNT - 1].nextEntry = DATA_BUF_NONE;
@@ -148,16 +156,58 @@ unsigned int AllocateDataBuf()
 	if(evictedEntry == DATA_BUF_NONE)
 		assert(!"[WARNING] There is no valid buffer entry [WARNING]");
 
-	if(dataBufMapPtr->dataBuf[evictedEntry].prevEntry != DATA_BUF_NONE)
-	{
-		dataBufMapPtr->dataBuf[dataBufMapPtr->dataBuf[evictedEntry].prevEntry].nextEntry = DATA_BUF_NONE;
-		dataBufLruList.tailEntry = dataBufMapPtr->dataBuf[evictedEntry].prevEntry;
+	/* mijin */
+	int bufIndex;
 
+	// Search a clean buffer in the scan depth
+	for (bufIndex = 0; bufIndex < CFLRU_SCAN_DEPTH; bufIndex++)
+	{
+		if (dataBufMapPtr->dataBuf[evictedEntry].dirty == DATA_BUF_CLEAN) break;
+	}
+
+	if (bufIndex == CFLRU_SCAN_DEPTH) xil_printf("[MIJIN] There is no clean buffer in the scan depth!!\r\n");
+
+	// Update the buf/hash maps to relocate the victim buffer to the head of the LRU list
+	if (dataBufMapPtr->dataBuf[evictedEntry].prevEntry != DATA_BUF_NONE && dataBufMapPtr->dataBuf[evictedEntry].nextEntry != DATA_BUF_NONE)
+	{
+		if (dataBufLruList.tailEntry == evictedEntry)
+		{
+			dataBufLruList.tailEntry = dataBufMapPtr->dataBuf[evictedEntry].prevEntry;
+		}
+
+		// Update prev->next
+		dataBufMapPtr->dataBuf[dataBufMapPtr->dataBuf[evictedEntry].prevEntry].nextEntry = dataBufMapPtr->dataBuf[evictedEntry].nextEntry;		
+
+		// Update next->prev
+		dataBufMapPtr->dataBuf[dataBufMapPtr->dataBuf[evictedEntry].nextEntry].prevEntry = dataBufMapPtr->dataBuf[evictedEntry].prevEntry;
+
+		// Update the victim
 		dataBufMapPtr->dataBuf[evictedEntry].prevEntry = DATA_BUF_NONE;
 		dataBufMapPtr->dataBuf[evictedEntry].nextEntry = dataBufLruList.headEntry;
+
+		// Update LRU head
 		dataBufMapPtr->dataBuf[dataBufLruList.headEntry].prevEntry = evictedEntry;
 		dataBufLruList.headEntry = evictedEntry;
+	}
+	else if (dataBufMapPtr->dataBuf[evictedEntry].prevEntry != DATA_BUF_NONE)
+	{
+		// Update prev->next
+		dataBufMapPtr->dataBuf[dataBufMapPtr->dataBuf[evictedEntry].prevEntry].nextEntry = DATA_BUF_NONE;
 
+		// Update LRU tail
+		dataBufLruList.tailEntry = dataBufMapPtr->dataBuf[evictedEntry].prevEntry;
+
+		// Update the victim
+		dataBufMapPtr->dataBuf[evictedEntry].prevEntry = DATA_BUF_NONE;
+		dataBufMapPtr->dataBuf[evictedEntry].nextEntry = dataBufLruList.headEntry;
+
+		// Update LRU head
+		dataBufMapPtr->dataBuf[dataBufLruList.headEntry].prevEntry = evictedEntry;
+		dataBufLruList.headEntry = evictedEntry;
+	}
+	else if (dataBufMapPtr->dataBuf[evictedEntry].nextEntry != DATA_BUF_NONE)
+	{
+		// Do nothing
 	}
 	else
 	{
@@ -166,6 +216,7 @@ unsigned int AllocateDataBuf()
 		dataBufLruList.headEntry = evictedEntry;
 		dataBufLruList.tailEntry = evictedEntry;
 	}
+	/* end */
 
 	SelectiveGetFromDataBufHashList(evictedEntry);
 

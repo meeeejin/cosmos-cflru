@@ -1,6 +1,6 @@
-# Cosmos+ OpenSSD Firmware with CFLRU (Clean First LRU)
+# Cosmos+ OpenSSD Firmware with CFLRU
 
 ## Feature
 
-- Data buffer management with CFLRU
+- Data buffer management with CFLRU (Clean First LRU)
 - WAF monitoring

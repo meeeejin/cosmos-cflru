@@ -55,7 +55,7 @@ P_DATA_BUF_HASH_TABLE dataBufHashTablePtr;
 P_TEMPORARY_DATA_BUF_MAP tempDataBufMapPtr;
 
 /* mijin */
-#define CFLRU_SCAN_DEPTH	1024
+#define CFLRU_SCAN_DEPTH	100
 /* end */
 
 void InitDataBuf()
@@ -157,38 +157,39 @@ unsigned int AllocateDataBuf()
 		assert(!"[WARNING] There is no valid buffer entry [WARNING]");
 
 	/* mijin */
-	int scanIndex;
-	unsigned int targetEntry = evictedEntry;
-
-	// Search a clean buffer in the scan depth
-	for (scanIndex = 0; scanIndex < CFLRU_SCAN_DEPTH && dataBufMapPtr->dataBuf[targetEntry].prevEntry != DATA_BUF_NONE; scanIndex++)
+	if (dataBufMapPtr->dataBuf[evictedEntry].dirty == DATA_BUF_DIRTY)
 	{
-		if (dataBufMapPtr->dataBuf[targetEntry].dirty == DATA_BUF_CLEAN)
+		int scanIndex;
+		unsigned int targetEntry = dataBufMapPtr->dataBuf[evictedEntry].prevEntry;
+
+		//xil_printf("[MIJIN] Before scanning, evictedEntry = %u!!\r\n", evictedEntry);
+
+		// Search a clean buffer in the scan depth
+		for (scanIndex = 0; scanIndex < CFLRU_SCAN_DEPTH && targetEntry != DATA_BUF_NONE; scanIndex++)
 		{
-			evictedEntry = targetEntry;
-			break;
+			if (dataBufMapPtr->dataBuf[targetEntry].dirty == DATA_BUF_CLEAN)
+			{
+				evictedEntry = targetEntry;
+				//xil_printf("[MIJIN] break %u!! with index %d\r\n", evictedEntry, scanIndex);
+				break;
+			}
+
+			targetEntry = dataBufMapPtr->dataBuf[targetEntry].prevEntry;
 		}
 
-		targetEntry = dataBufMapPtr->dataBuf[targetEntry].prevEntry;
-	}
-
-	if (scanIndex == CFLRU_SCAN_DEPTH)
-	{
-		xil_printf("[MIJIN] There is no clean buffer in the scan depth, evictedEntry = %u!!\r\n", evictedEntry);
-	}
-	else
-	{
-		xil_printf("[MIJIN] scanIndex = %d, evictedEntry = %u!!\r\n", scanIndex, evictedEntry);
+		if (scanIndex == CFLRU_SCAN_DEPTH)
+		{
+			//xil_printf("[MIJIN] There is no clean buffer in the scan depth, evictedEntry = %u!!\r\n", evictedEntry);
+		}
+		else
+		{
+			xil_printf("[MIJIN] success..scanIndex = %d, evictedEntry = %u!!\r\n", scanIndex, evictedEntry);
+		}
 	}
 
 	// Update the buf/hash maps to relocate the victim buffer to the head of the LRU list
 	if (dataBufMapPtr->dataBuf[evictedEntry].prevEntry != DATA_BUF_NONE && dataBufMapPtr->dataBuf[evictedEntry].nextEntry != DATA_BUF_NONE)
 	{
-		if (dataBufLruList.tailEntry == evictedEntry)
-		{
-			dataBufLruList.tailEntry = dataBufMapPtr->dataBuf[evictedEntry].prevEntry;
-		}
-
 		// Update prev->next
 		dataBufMapPtr->dataBuf[dataBufMapPtr->dataBuf[evictedEntry].prevEntry].nextEntry = dataBufMapPtr->dataBuf[evictedEntry].nextEntry;		
 
@@ -202,6 +203,8 @@ unsigned int AllocateDataBuf()
 		// Update LRU head
 		dataBufMapPtr->dataBuf[dataBufLruList.headEntry].prevEntry = evictedEntry;
 		dataBufLruList.headEntry = evictedEntry;
+
+		//xil_printf("[MIJIN] Case 1\r\n");
 	}
 	else if (dataBufMapPtr->dataBuf[evictedEntry].prevEntry != DATA_BUF_NONE)
 	{
@@ -218,10 +221,12 @@ unsigned int AllocateDataBuf()
 		// Update LRU head
 		dataBufMapPtr->dataBuf[dataBufLruList.headEntry].prevEntry = evictedEntry;
 		dataBufLruList.headEntry = evictedEntry;
+		//xil_printf("[MIJIN] Case 2\r\n");
 	}
 	else if (dataBufMapPtr->dataBuf[evictedEntry].nextEntry != DATA_BUF_NONE)
 	{
 		// Do nothing
+		//xil_printf("[MIJIN] Case 3\r\n");
 	}
 	else
 	{
@@ -229,6 +234,7 @@ unsigned int AllocateDataBuf()
 		dataBufMapPtr->dataBuf[evictedEntry].nextEntry = DATA_BUF_NONE;
 		dataBufLruList.headEntry = evictedEntry;
 		dataBufLruList.tailEntry = evictedEntry;
+		//xil_printf("[MIJIN] Case 4\r\n");
 	}
 	/* end */
 
